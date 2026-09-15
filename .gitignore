@@ -1,0 +1,11 @@
+# Local environment and credentials
+.venv/
+.env
+.streamlit/secrets.toml
+
+# MovieLens data and generated outputs
+data/raw/
+data/processed/
+
+# macOS files
+.DS_Store
