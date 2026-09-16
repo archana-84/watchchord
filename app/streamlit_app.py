@@ -66,19 +66,19 @@ st.subheader("Who's watching?")
 left, right = st.columns(2)
 
 with left:
-    viewer_a = st.selectbox(
-        "Viewer A's preferred genre",
+    viewer_a = st.multiselect(
+        "Viewer A's preferred genres",
         options=genres,
-        index=genres.index("Comedy"),
-        key="viewer_a",
+        default=["Comedy"],
+        key="viewer_a_genres",
     )
 
 with right:
-    viewer_b = st.selectbox(
-        "Viewer B's preferred genre",
+    viewer_b = st.multiselect(
+        "Viewer B's preferred genres",
         options=genres,
-        index=genres.index("Adventure"),
-        key="viewer_b",
+        default=["Adventure"],
+        key="viewer_b_genres",
     )
 
 excluded_genre = st.selectbox(
@@ -97,17 +97,33 @@ watched_ids = st.multiselect(
 st.divider()
 st.subheader("Your movie-night preferences")
 
-st.write(f"**Viewer A:** {viewer_a}")
-st.write(f"**Viewer B:** {viewer_b}")
+st.write(f"**Viewer A:** {', '.join(viewer_a) or 'None selected'}")
+st.write(f"**Viewer B:** {', '.join(viewer_b) or 'None selected'}")
 st.write(f"**Excluded genre:** {excluded_genre or 'None'}")
 st.write(f"**Movies already watched:** {len(watched_ids)}")
 
-if excluded_genre in (viewer_a, viewer_b):
-    st.warning(
-        "A preferred genre is also excluded. "
-        "Change a preference or the exclusion to find matching movies."
-    )
+effective_a = [
+    genre for genre in viewer_a if genre != excluded_genre
+]
+effective_b = [
+    genre for genre in viewer_b if genre != excluded_genre
+]
 
+preferences_blocked = not effective_a or not effective_b
+
+if not viewer_a or not viewer_b:
+    st.warning("Choose at least one preferred genre for each viewer.")
+elif preferences_blocked:
+    st.warning(
+        "One viewer's only preferred genre is excluded. "
+        "Add another preferred genre or change the exclusion."
+    )
+elif excluded_genre in viewer_a or excluded_genre in viewer_b:
+    st.info(
+        f"{excluded_genre} is excluded. "
+        "We'll use the remaining preferred genres."
+    )
+    
 st.caption(
     "Movie data: MovieLens Latest Small, GroupLens. "
     "This dataset contains ratings through September 2018."
@@ -116,8 +132,9 @@ st.caption(
 st.divider()
 st.subheader("Your shared shortlist")
 
-if excluded_genre in (viewer_a, viewer_b):
-    st.info("Resolve the conflicting genre choices above to see recommendations.")
+if preferences_blocked:
+    st.info("Update the genre choices above to see recommendations.")
+
 else:
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
@@ -132,6 +149,20 @@ else:
         connection.executemany(
             "INSERT INTO watched_movies (movie_id) VALUES (?);",
             [(movie_id,) for movie_id in sorted(set(watched_ids))],
+        )
+
+        connection.execute("""
+            CREATE TEMP TABLE viewer_preferences (
+                viewer TEXT NOT NULL,
+                genre TEXT NOT NULL,
+                PRIMARY KEY (viewer, genre)
+            );
+        """)
+
+        connection.executemany(
+            "INSERT INTO viewer_preferences (viewer, genre) VALUES (?, ?);",
+            [("A", genre) for genre in effective_a]
+            + [("B", genre) for genre in effective_b],
         )
 
         query = """
@@ -161,12 +192,20 @@ else:
                 ON s.movie_id = m.movie_id
             CROSS JOIN overall AS o
             WHERE EXISTS (
-                SELECT 1 FROM movie_genres AS g
-                WHERE g.movie_id = m.movie_id AND g.genre = ?
+                SELECT 1
+                FROM movie_genres AS g
+                JOIN viewer_preferences AS p
+                    ON p.genre = g.genre
+                WHERE g.movie_id = m.movie_id
+                  AND p.viewer = 'A'
             )
             AND EXISTS (
-                SELECT 1 FROM movie_genres AS g
-                WHERE g.movie_id = m.movie_id AND g.genre = ?
+                SELECT 1
+                FROM movie_genres AS g
+                JOIN viewer_preferences AS p
+                    ON p.genre = g.genre
+                WHERE g.movie_id = m.movie_id
+                  AND p.viewer = 'B'
             )
             AND NOT EXISTS (
                 SELECT 1 FROM movie_genres AS g
@@ -185,7 +224,7 @@ else:
 
         recommendations = connection.execute(
             query,
-            (viewer_a, viewer_b, excluded_genre),
+            (excluded_genre,),
         ).fetchall()
 
     finally:
@@ -210,16 +249,22 @@ else:
                 )
                 st.write(movie["genres"].replace("|", " · "))
 
-                if viewer_a == viewer_b:
-                    st.write(
-                        f"**Why it matches:** Tagged {viewer_a}, "
-                        "the genre both viewers selected."
-                    )
-                else:
-                    st.write(
-                        f"**Why it matches:** Tagged {viewer_a} for "
-                        f"Viewer A and {viewer_b} for Viewer B."
-                    )
+                movie_genres = set(movie["genres"].split("|"))
+
+                matches_a = [
+                    genre for genre in effective_a
+                    if genre in movie_genres
+                ]
+                matches_b = [
+                    genre for genre in effective_b
+                    if genre in movie_genres
+                ]
+
+                st.write(
+                    f"**Why it matches:** "
+                    f"{', '.join(matches_a)} for Viewer A; "
+                    f"{', '.join(matches_b)} for Viewer B."
+                )
 
                 st.caption(
                     f"Weighted rating: {movie['weighted_score']:.3f} / 5"
