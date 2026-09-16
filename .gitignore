@@ -9,3 +9,6 @@ data/processed/
 
 # macOS files
 .DS_Store
+
+# Generated local database
+database/
