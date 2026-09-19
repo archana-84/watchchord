@@ -152,6 +152,7 @@ MOVIELENS_QUERY = """
         """
 
 
+
 def main():
     st.set_page_config(page_title="WatchChord", page_icon="🎬", layout="wide")
     st.markdown("""
@@ -229,13 +230,21 @@ def main():
     elif excluded in viewer_a or excluded in viewer_b:
         st.info(f"{excluded} is excluded. We'll use the remaining preferred genres.")
 
-    # Use the explicit crosswalk in both directions; IDs from different sources never mix.
+    all_watched_ids = set(watched_ids)
+
+    # Connect watched movies across sources using the ID crosswalk.
     watched_tmdb = set(recent_watched) | {
-        links[i] for i in watched_ids if links.get(i) is not None
+        links[movie_id]
+        for movie_id in all_watched_ids
+        if links.get(movie_id) is not None
     }
-    watched_movielens = set(watched_ids) | {
-        ml_id for ml_id, tmdb_id in links.items() if tmdb_id in watched_tmdb
+
+    watched_movielens = all_watched_ids | {
+        movie_id
+        for movie_id, tmdb_id in links.items()
+        if tmdb_id in watched_tmdb
     }
+
     aliases = {"Sci-Fi": "Science Fiction"}
     requested = set(viewer_a + viewer_b) | ({excluded} if excluded else set())
     unsupported = sorted(g for g in requested if aliases.get(g, g) not in set(genre_names.values()))
@@ -273,7 +282,9 @@ def main():
             st.info("TMDB has no direct category match for: " + ", ".join(unsupported)
                     + ". Change those selections to browse recent movies. MovieLens still works on the left.")
         else:
-            missing_links = sum(links.get(i) is None for i in watched_ids)
+            missing_links = sum(
+                links.get(i) is None for i in all_watched_ids
+            )
             if missing_links:
                 st.warning(f"{missing_links} watched selection(s) couldn't be linked to TMDB. "
                            "If they appear in the recent watched list, select them there too.")
