@@ -1,4 +1,3 @@
-"""WatchChord: shared preferences, two clearly labeled movie catalogs."""
 import re
 import sqlite3
 from contextlib import closing
@@ -8,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATABASE_PATH = PROJECT_ROOT / "database" / "watchchord.db"
+DATABASE_PATH = PROJECT_ROOT / "demo" / "watchchord_demo.db"
 
 
 def display_title(title):
@@ -96,16 +95,16 @@ def match_explanation(labels, preferred_a, preferred_b):
 
 MOVIELENS_QUERY = """
             WITH overall AS (
-                SELECT AVG(rating) AS overall_average
-                FROM ratings
+                SELECT overall_average
+                FROM rating_baseline
+                WHERE id = 1
             ),
             movie_stats AS (
                 SELECT
                     movie_id,
-                    COUNT(*) AS rating_count,
-                    SUM(rating) AS total_rating_points
-                FROM ratings
-                GROUP BY movie_id
+                    rating_count,
+                    total_rating_points
+                FROM movie_rating_summary
             )
             SELECT
                 m.movie_id,
@@ -167,15 +166,15 @@ def main():
     st.caption("Choose what you both enjoy. Explore familiar favorites and recent releases side by side.")
 
     if not DATABASE_PATH.exists():
-        st.error("The movie database is missing. Run the database setup first.")
+        st.error("The demo movie database is missing. Please contact the app owner.")
         st.stop()
     try:
         genres, titles, recent_ready, recent, genre_names, recent_genres, links = load_catalogs()
     except sqlite3.Error:
-        st.error("The movie catalog could not be loaded. Check that the database setup and imports are complete.")
+        st.error("The movie catalog could not be loaded. Please contact the app owner.")
         st.stop()
     if not genres or not titles:
-        st.error("Load the movies and build the genre table first.")
+        st.error("The movie catalog is empty. Please contact the app owner.")
         st.stop()
 
     with st.container(border=True):
