@@ -1,5 +1,7 @@
 # WatchChord
 
+**[Try the live demo](https://watchchord.streamlit.app/)**
+
 ### Finding a movie two people can agree on
 
 Choosing a movie can take longer than expected when two people enjoy different things. I built WatchChord to make that choice easier. Each viewer selects the genres they like, and the app creates a shortlist of movies that match both people's choices.
